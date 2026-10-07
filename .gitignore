@@ -1,0 +1,24 @@
+# ===== 真实同学名单（含个人隐私，禁止提交）=====
+js/students.js
+
+# ===== Node（仅 tools/build-map.js 重新生成地图数据时可能用到）=====
+node_modules/
+package-lock.json
+
+# ===== 系统垃圾 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 编辑器 / IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== 日志、临时文件、调试截图 =====
+*.log
+*.tmp
+tools/*.png
+tools/*.jpg
+tools/*.jpeg

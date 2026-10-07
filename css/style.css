@@ -1,0 +1,419 @@
+/* ============================================================
+   毕业蹭饭图 · 霓虹周期表风格
+   ============================================================ */
+* { box-sizing: border-box; }
+
+:root {
+	--bg: #070a10;
+	--text: #e8f1ff;
+	--muted: #7d8aa3;
+}
+
+html, body {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background:
+		radial-gradient(1100px 700px at 50% -10%, rgba(60, 110, 200, 0.18), transparent 60%),
+		radial-gradient(900px 600px at 100% 110%, rgba(180, 85, 255, 0.10), transparent 60%),
+		var(--bg);
+	color: var(--text);
+	font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+	overflow: hidden;
+	user-select: none;
+	display: flex;      /* 标题 + 地图纵向分配，标题多高都不挤掉地图底部 */
+	flex-direction: column;
+	height: 100vh;
+}
+
+/* ---------------- 顶部标题 ---------------- */
+header {
+	text-align: center;
+	padding: 18px 16px 4px;
+	flex: none;
+}
+header h1 {
+	margin: 0;
+	font-size: clamp(20px, 3vw, 34px);
+	letter-spacing: 4px;
+	font-weight: 800;
+	color: #fff;
+	text-shadow: 0 0 12px rgba(120, 190, 255, .55), 0 0 32px rgba(120, 160, 255, .35);
+}
+header p {
+	margin: 8px 0 6px;
+	font-size: clamp(11px, 1.2vw, 14px);
+	color: var(--muted);
+	letter-spacing: 2px;
+}
+/* 任课老师一行 */
+#teachers {
+	margin: 4px 0 2px !important;
+	font-size: clamp(10px, 1.05vw, 12.5px) !important;
+	letter-spacing: 1px !important;
+	color: #7e93ad;
+}
+#teachers .teacher i {
+	font-style: normal;
+	color: #5a6d85;
+	margin-right: 5px;
+}
+#teachers .t-sep {
+	margin: 0 9px;
+	color: #3d4d61;
+}
+
+.stats {
+	display: inline-flex;
+	gap: 14px;
+	font-size: 12px;
+	color: var(--muted);
+}
+.stats b {
+	color: #8fd3ff;
+	font-size: 15px;
+	margin: 0 3px;
+	text-shadow: 0 0 10px rgba(0, 217, 255, .7);
+}
+
+/* ---------------- 地图舞台 ---------------- */
+#stage {
+	position: relative;
+	flex: 1 1 auto;   /* 占满标题之外的剩余视口，底部图例永远不会被切掉 */
+	min-height: 0;
+	padding: 4px 2vw 76px;
+}
+
+#map {
+	width: 100%;
+	height: 100%;
+	display: block;
+	overflow: visible; /* 省份放大后允许超出地图视口，不被裁切 */
+}
+
+/* 光晕副本：平时不渲染；hover / 选中时出现，它是唯一挂 filter 的元素。
+   柔光本来就是模糊的，所以它被 GPU 纹理化也无所谓；
+   清晰本体 .province 不挂 filter，放大边缘始终锐利。 */
+.halo {
+	display: none;
+	pointer-events: none;
+	fill: var(--c);
+	stroke: var(--c);
+	stroke-width: 1.1;
+	vector-effect: non-scaling-stroke;
+	transition: transform .55s cubic-bezier(.22, .9, .26, 1.05);
+}
+.cell:hover .halo {
+	display: inline;
+	fill-opacity: .33;
+	filter: drop-shadow(0 0 5px var(--c)) drop-shadow(0 0 14px var(--c));
+}
+.cell.glow .halo {
+	display: inline;
+	fill-opacity: .24; /* .13 的本体 + .24 的光晕 ≈ .34 总填充 */
+	filter: drop-shadow(0 0 4px var(--c)) drop-shadow(0 0 10px var(--c));
+}
+
+.province {
+	fill: var(--c);
+	fill-opacity: .13;
+	stroke: var(--c);
+	stroke-width: 1.1;
+	vector-effect: non-scaling-stroke;
+	cursor: pointer;
+	transition:
+		transform .55s cubic-bezier(.22, .9, .26, 1.05),
+		opacity .35s ease,
+		stroke-width .35s ease;
+}
+.province.selected {
+	stroke-width: 1.7; /* 放大后一条明确挺括的轮廓亮线 */
+}
+
+/* 选中某省 / 大区筛选时，其余省份变暗（对应周期表的 overlay） */
+.viewing .province.dim {
+	fill-opacity: .05;
+	opacity: .22;
+}
+.viewing .province.dim { pointer-events: none; }
+.filtering .cell.faded .province {
+	fill-opacity: .05;
+	opacity: .22;
+}
+
+/* 十段线 */
+#ten-dash {
+	fill: none;
+	stroke: #6fc3ff;
+	stroke-width: 1;
+	opacity: .75;
+	stroke-dasharray: 5 3;
+	vector-effect: non-scaling-stroke;
+	pointer-events: none;
+}
+
+/* 省名标签：默认隐藏，点开某省放大后才出现（深色描边保证在亮色省域上清晰） */
+.province-label {
+	fill: #e6f1ff;
+	stroke: rgba(5, 9, 16, .85);
+	stroke-width: 1.4px;
+	paint-order: stroke;
+	vector-effect: non-scaling-stroke;
+	font-weight: 700;
+	letter-spacing: .5px;
+	pointer-events: none;
+	opacity: 0;
+	transition:
+		opacity .3s ease,
+		transform .55s cubic-bezier(.22, .9, .26, 1.05);
+}
+.province-label.label-lg { font-size: 6.2px; }
+.province-label.label-sm { font-size: 4.4px; }
+/* 只有被点开放大的那个省显示名字，并跟随放大动画 */
+.province-label.selected-label { opacity: 1; }
+
+/* ---------------- 人数脉冲角标 ---------------- */
+.pin { pointer-events: none; }
+.pin-halo {
+	r: 3.4;
+	fill: none;
+	stroke: var(--c);
+	stroke-width: 1;
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: halo 2.2s ease-out infinite;
+}
+.pin-dot { fill: var(--c); }
+.pin-num {
+	fill: #061018;
+	font-size: 3.6px;
+	font-weight: 800;
+}
+@keyframes halo {
+	0%   { transform: scale(1);   opacity: .9; }
+	70%  { transform: scale(2.6); opacity: 0; }
+	100% { transform: scale(2.6); opacity: 0; }
+}
+.pin.faded { opacity: .12; }
+.viewing .pin { opacity: 0; transition: opacity .25s ease; }
+
+/* ---------------- 南海诸岛附图 ---------------- */
+#inset-wrap {
+	position: absolute;
+	right: max(14px, 2.5vw);
+	bottom: 86px;
+	width: clamp(150px, 19vw, 230px);
+	border: 1px solid rgba(111, 195, 255, .5);
+	border-radius: 6px;
+	background: rgba(7, 12, 20, .72);
+	box-shadow: 0 0 18px rgba(0, 140, 255, .18);
+	padding: 4px;
+	transition: opacity .3s ease;
+}
+#inset-wrap .tag {
+	position: absolute;
+	left: 6px;
+	top: 5px;
+	font-size: 10px;
+	color: #8fc9ff;
+	letter-spacing: 2px;
+}
+#inset {
+	width: 100%;
+	display: block;
+	pointer-events: none;
+}
+.viewing #inset-wrap,
+.filtering #inset-wrap { opacity: .25; }
+
+/* ---------------- 遮罩 ---------------- */
+#overlay {
+	position: fixed;
+	inset: 0;
+	/* 只用深色压暗，绝不能加 backdrop-filter：
+	   遮罩出现时它会把后面放大的省份和省名整体毛玻璃模糊掉 */
+	background: rgba(3, 6, 10, .62);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity .4s ease;
+	z-index: 5;
+}
+#overlay.show { opacity: 1; pointer-events: auto; }
+
+/* ---------------- 信息卡 ---------------- */
+#card {
+	position: fixed;
+	z-index: 10;
+	right: 3vw;
+	top: 50%;
+	width: min(360px, 92vw);
+	max-height: 78vh;
+	overflow-y: auto;
+	transform: translate(24px, -50%);
+	opacity: 0;
+	pointer-events: none;
+	background: rgba(12, 17, 26, .88);
+	border: 1px solid var(--c, #4d96ff);
+	border-radius: 14px;
+	box-shadow: 0 0 24px color-mix(in srgb, var(--c, #4d96ff) 35%, transparent),
+				inset 0 0 30px rgba(255, 255, 255, .02);
+	backdrop-filter: blur(14px);
+	padding: 20px 22px;
+	transition: transform .5s cubic-bezier(.22, .9, .26, 1.05), opacity .4s ease;
+}
+#card.show {
+	transform: translate(0, -50%);
+	opacity: 1;
+	pointer-events: auto;
+}
+.card-head h2 {
+	margin: 4px 0 2px;
+	font-size: 28px;
+	letter-spacing: 4px;
+	color: #fff;
+	text-shadow: 0 0 14px var(--c);
+}
+.card-region { font-size: 12px; letter-spacing: 3px; }
+.card-count { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+
+.card-list { display: flex; flex-direction: column; gap: 12px; }
+.school {
+	border-left: 3px solid var(--c);
+	padding-left: 12px;
+}
+.school-name {
+	font-size: 15px;
+	font-weight: 700;
+	color: #dff0ff;
+	margin-bottom: 6px;
+}
+.school-names { display: flex; flex-wrap: wrap; gap: 6px; }
+.school-names span {
+	font-size: 12.5px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+	color: #eaf6ff;
+	background: color-mix(in srgb, var(--c) 12%, transparent);
+}
+.card-tip {
+	margin: 16px 0 0;
+	font-size: 12px;
+	color: var(--muted);
+	text-align: center;
+	letter-spacing: 1px;
+}
+.card-empty {
+	color: var(--muted);
+	font-size: 13.5px;
+	line-height: 2;
+	padding: 14px 0;
+}
+.card-close {
+	position: absolute;
+	right: 12px;
+	top: 12px;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	border: 1px solid rgba(255, 255, 255, .25);
+	background: transparent;
+	color: #aab8cc;
+	cursor: pointer;
+	font-size: 14px;
+	line-height: 1;
+}
+.card-close::before { content: "✕"; }
+.card-close:hover { color: #fff; border-color: #fff; }
+
+/* ---------------- tooltip ---------------- */
+#tooltip {
+	position: fixed;
+	z-index: 20;
+	pointer-events: none;
+	opacity: 0;
+	transform: translateY(4px);
+	transition: opacity .18s ease, transform .18s ease;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: rgba(10, 15, 24, .92);
+	border: 1px solid rgba(140, 190, 255, .35);
+	border-radius: 8px;
+	padding: 6px 12px;
+	font-size: 12.5px;
+	box-shadow: 0 4px 18px rgba(0, 0, 0, .5);
+}
+#tooltip.show { opacity: 1; transform: translateY(0); }
+#tooltip i {
+	font-style: normal;
+	color: #8fd3ff;
+	font-size: 11.5px;
+}
+
+/* ---------------- 大区图例 ---------------- */
+#legend {
+	position: absolute;
+	left: 50%;
+	bottom: 16px;
+	transform: translateX(-50%);
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	max-width: 94vw;
+	z-index: 3;
+}
+.legend-item {
+	--c: #888;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 13px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+	background: rgba(10, 15, 24, .65);
+	color: #cdd9ea;
+	font-size: 12.5px;
+	letter-spacing: 2px;
+	cursor: pointer;
+	transition: all .25s ease;
+}
+.legend-item i {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--c);
+	box-shadow: 0 0 8px var(--c);
+}
+.legend-item:hover {
+	color: #fff;
+	box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent);
+}
+.legend-item.on {
+	background: var(--c);
+	border-color: var(--c);
+	color: #08101a;
+	font-weight: 700;
+}
+.viewing #legend { opacity: .35; pointer-events: none; }
+
+/* ---------------- 小屏适配 ---------------- */
+@media (max-width: 760px) {
+	header { padding-top: 12px; }
+	#stage { padding-bottom: 104px; }
+	#card {
+		left: 4vw;
+		right: 4vw;
+		top: auto;
+		bottom: 12px;
+		width: auto;
+		max-height: 56vh;
+		transform: translateY(24px);
+	}
+	#card.show { transform: translateY(0); }
+	#inset-wrap { width: 120px; bottom: 118px; }
+	.legend-item { padding: 5px 10px; font-size: 11.5px; }
+}

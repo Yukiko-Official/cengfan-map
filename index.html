@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>毕业蹭饭图</title>
+	<link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+	<header>
+		<h1 id="title"></h1>
+		<p id="subtitle"></p>
+		<p id="teachers"></p>
+		<div class="stats">
+			<span><b id="stat-num">0</b>位同学</span>
+			<span>散落<b id="stat-prov">0</b>个省份</span>
+		</div>
+	</header>
+
+	<main id="stage">
+		<svg id="map" xmlns="http://www.w3.org/2000/svg">
+			<g id="mapGroup">
+				<g id="borders">
+					<g id="geo"></g>
+					<path id="ten-dash"></path>
+				</g>
+				<g id="labels"></g>
+				<g id="pins"></g>
+			</g>
+		</svg>
+
+		<!-- 南海诸岛附图：只复用省界+十段线，换 viewBox 裁剪 -->
+		<div id="inset-wrap">
+			<span class="tag">南海诸岛</span>
+			<svg id="inset" xmlns="http://www.w3.org/2000/svg">
+				<use href="#borders"></use>
+			</svg>
+		</div>
+
+		<div id="tooltip"></div>
+		<div id="overlay"></div>
+		<aside id="card"></aside>
+
+		<nav id="legend"></nav>
+	</main>
+
+	<script src="./js/map-data.js"></script>
+	<script src="./js/students.js"></script>
+	<script src="./js/app.js"></script>
+</body>
+</html>

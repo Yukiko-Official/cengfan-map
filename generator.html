@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蹭饭图数据生成器</title>
+<style>
+/* ============================================================
+   蹭饭图数据生成器 · 单文件，双击即用
+   ============================================================ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+	color-scheme: dark;   /* 关键：让原生下拉弹层等表单控件按暗色主题绘制，否则会白底配浅字 */
+	--bg: #070a10;
+	--panel: rgba(13, 20, 32, .82);
+	--line: #223149;
+	--line-focus: #38bdf8;
+	--text: #e8f1ff;
+	--muted: #8294ad;
+	--cyan: #22d3ee;
+	--green: #34d399;
+	--red: #f87171;
+	--yellow: #fbbf24;
+}
+
+html, body { height: 100%; }
+body {
+	background:
+		radial-gradient(1100px 600px at 50% -10%, rgba(60, 110, 200, .18), transparent 60%),
+		var(--bg);
+	color: var(--text);
+	font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+	font-size: 15px;
+	line-height: 1.6;
+	padding-bottom: 40px;
+}
+
+/* 表单控件显式统一字体，避免下拉框变成系统字体 */
+input, select, textarea, button {
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+}
+
+.wrap { max-width: 1060px; margin: 0 auto; padding: 0 20px; }
+
+/* ---------------- 顶部 ---------------- */
+.top {
+	text-align: center;
+	padding: 34px 16px 10px;
+}
+.top h1 {
+	font-size: clamp(22px, 3.4vw, 34px);
+	letter-spacing: 4px;
+	font-weight: 800;
+	text-shadow: 0 0 18px rgba(34, 211, 238, .45);
+}
+.top p { color: var(--muted); font-size: 13px; margin-top: 6px; letter-spacing: 1px; }
+.stat-bar {
+	display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+	margin-top: 14px;
+}
+.chip {
+	border: 1px solid var(--line);
+	background: rgba(14, 22, 36, .8);
+	border-radius: 999px;
+	padding: 5px 16px;
+	font-size: 13px;
+	color: #b9c8dc;
+}
+.chip b { color: var(--cyan); font-size: 15px; margin: 0 2px; }
+.chip.warn b { color: var(--yellow); }
+.chip.bad b { color: var(--red); }
+.save-state { font-size: 12px; color: var(--green); margin-top: 8px; min-height: 18px; }
+
+/* ---------------- 步骤卡片 ---------------- */
+.card {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	padding: 22px 24px;
+	margin-top: 22px;
+	box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
+}
+.step-title {
+	display: flex; align-items: center; gap: 12px;
+	font-size: 18px; font-weight: 700; letter-spacing: 2px;
+	margin-bottom: 4px;
+}
+.step-no {
+	width: 30px; height: 30px; flex: none;
+	border-radius: 50%;
+	display: grid; place-items: center;
+	background: linear-gradient(135deg, #0ea5e9, #22d3ee);
+	color: #06121d; font-weight: 800;
+	box-shadow: 0 0 14px rgba(34, 211, 238, .5);
+}
+.step-hint { color: var(--muted); font-size: 13px; margin: 2px 0 16px 42px; }
+
+label.field { display: block; margin-bottom: 14px; }
+label.field > span {
+	display: block; font-size: 13px; color: #9fb2c9; margin-bottom: 6px; letter-spacing: 1px;
+}
+input[type="text"], textarea {
+	width: 100%;
+	background: #0c131f;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	padding: 10px 13px;
+	outline: none;
+	transition: border-color .15s, box-shadow .15s;
+}
+input[type="text"]:focus, textarea:focus {
+	border-color: var(--line-focus);
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, .15);
+}
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* ---------------- 自绘下拉（不依赖系统原生弹层，颜色完全可控） ---------------- */
+.pick {
+	width: 100%;
+	display: flex; align-items: center; justify-content: space-between;
+	gap: 8px;
+	background: #0c131f;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	padding: 10px 13px;
+	cursor: pointer;
+	text-align: left;
+	color: var(--text);
+	transition: border-color .15s, box-shadow .15s;
+}
+.pick:hover { border-color: #3b557a; }
+.pick.open, .pick:focus-visible {
+	border-color: var(--line-focus);
+	box-shadow: 0 0 0 3px rgba(56, 189, 248, .15);
+	outline: none;
+}
+.pick .pick-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick.placeholder .pick-label { color: #64748b; }
+.pick .caret { flex: none; color: #7186a0; font-style: normal; font-size: 12px; transition: transform .15s; }
+.pick.open .caret { transform: rotate(180deg); }
+
+.pick-menu {
+	position: fixed;
+	z-index: 60;
+	background: #0f1927;
+	border: 1px solid #2f4360;
+	border-radius: 12px;
+	box-shadow: 0 16px 48px rgba(0, 0, 0, .6);
+	padding: 6px;
+	max-height: 264px;
+	overflow-y: auto;
+	display: none;
+	scrollbar-width: thin;
+	scrollbar-color: #3b557a transparent;
+}
+/* Chromium / Edge：把滚动条做宽做亮，保证能看见、能抓住 */
+.pick-menu::-webkit-scrollbar { width: 10px; }
+.pick-menu::-webkit-scrollbar-track { background: transparent; }
+.pick-menu::-webkit-scrollbar-thumb {
+	background: #3b557a;
+	border-radius: 6px;
+	border: 2px solid #0f1927;
+}
+.pick-menu::-webkit-scrollbar-thumb:hover { background: #50739f; }
+.pick-menu.show { display: grid; grid-template-columns: repeat(2, minmax(92px, 1fr)); gap: 2px; }
+.pick-opt {
+	border: none; background: transparent;
+	color: #dbe7f5;
+	border-radius: 8px;
+	padding: 8px 12px;
+	cursor: pointer;
+	text-align: left;
+	font-size: 14px;
+	white-space: nowrap;
+}
+.pick-opt:hover, .pick-opt.hl { background: #1d3149; }
+.pick-opt.sel { background: #155e63; color: #ffffff; font-weight: 600; }
+
+/* ---------------- 按钮 ---------------- */
+.btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+	border: 1px solid var(--line);
+	background: #101a2a;
+	color: #d5e2f2;
+	border-radius: 10px;
+	padding: 9px 18px;
+	cursor: pointer;
+	letter-spacing: 1px;
+	transition: all .15s;
+	white-space: nowrap;
+}
+.btn:hover { border-color: #3b557a; background: #152236; }
+.btn.primary {
+	background: linear-gradient(135deg, #0891b2, #22d3ee);
+	border-color: transparent;
+	color: #04141d; font-weight: 700;
+}
+.btn.primary:hover { box-shadow: 0 0 18px rgba(34, 211, 238, .45); }
+.btn.green {
+	background: linear-gradient(135deg, #059669, #34d399);
+	border-color: transparent; color: #04180f; font-weight: 700;
+}
+.btn.green:hover { box-shadow: 0 0 18px rgba(52, 211, 153, .45); }
+.btn.danger { color: var(--red); border-color: rgba(248, 113, 113, .4); }
+.btn.danger:hover { background: rgba(248, 113, 113, .12); }
+.btn.small { padding: 5px 12px; font-size: 13px; border-radius: 8px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+
+/* ---------------- 老师行 / 同学行 ---------------- */
+.t-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr 42px;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+.s-row {
+	display: grid;
+	grid-template-columns: 150px 130px 1fr 42px;
+	gap: 10px;
+	align-items: center;
+	padding: 8px;
+	border-radius: 12px;
+	border: 1px solid transparent;
+	transition: background .15s, border-color .15s;
+}
+.s-row:hover { background: rgba(24, 36, 56, .55); }
+.s-row.bad { border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .06); }
+.s-row .f-prov { font-weight: 600; }
+.icon-btn {
+	width: 36px; height: 36px;
+	border: 1px solid rgba(248, 113, 113, .35);
+	background: transparent; color: var(--red);
+	border-radius: 9px; cursor: pointer; font-size: 18px; line-height: 1;
+}
+.icon-btn:hover { background: rgba(248, 113, 113, .14); }
+
+.empty-tip {
+	text-align: center; color: var(--muted);
+	padding: 34px 10px; border: 1px dashed var(--line); border-radius: 12px;
+}
+.list-tools {
+	display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+.list-tools .pick { padding: 7px 13px; font-size: 13px; border-radius: 8px; }
+.list-tools .count-info { color: var(--muted); font-size: 13px; margin-left: auto; }
+.done-row { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+/* 点「完成」后第三步卡片的一次高亮，提示视线跳到这里 */
+@keyframes card-flash {
+	0%   { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); border-color: var(--line); }
+	18%  { box-shadow: 0 0 0 3px rgba(34, 211, 238, .35), 0 0 34px rgba(34, 211, 238, .28); border-color: rgba(34, 211, 238, .75); }
+	100% { box-shadow: 0 10px 40px rgba(0, 0, 0, .35); border-color: var(--line); }
+}
+#export-card.flash { animation: card-flash 1.5s ease; }
+
+/* ---------------- 代码预览 ---------------- */
+pre.preview {
+	background: #080d16;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	padding: 16px;
+	max-height: 320px; overflow: auto;
+	font-family: Consolas, "Cascadia Code", monospace;
+	font-size: 12.5px;
+	line-height: 1.7;
+	color: #a8bdd6;
+	white-space: pre;
+}
+.export-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+.check-msg {
+	border-radius: 10px; padding: 10px 14px; font-size: 13.5px;
+	margin-bottom: 12px; border: 1px solid var(--line);
+}
+.check-msg.ok { border-color: rgba(52,211,153,.4); color: #baf5dd; background: rgba(52,211,153,.08); }
+.check-msg.err { border-color: rgba(248,113,113,.45); color: #fecaca; background: rgba(248,113,113,.08); }
+
+/* ---------------- 弹窗 ---------------- */
+.mask {
+	position: fixed; inset: 0;
+	background: rgba(3, 6, 11, .72);
+	display: none;
+	align-items: center; justify-content: center;
+	z-index: 50;
+	padding: 20px;
+}
+.mask.show { display: flex; }
+.modal {
+	background: #0e1623;
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	padding: 24px;
+	width: 640px; max-width: 100%;
+	max-height: 86vh; overflow: auto;
+}
+.modal h3 { font-size: 17px; margin-bottom: 6px; letter-spacing: 1px; }
+.modal .help { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.modal textarea { min-height: 200px; resize: vertical; }
+.parse-result { font-size: 13.5px; margin: 10px 0; }
+.parse-result .ok2 { color: var(--green); }
+.parse-result .bad2 { color: var(--red); }
+.parse-result details { margin-top: 6px; color: var(--yellow); font-size: 12.5px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.example-line {
+	font-family: Consolas, monospace; font-size: 12.5px;
+	background: #080d16; border: 1px solid var(--line);
+	border-radius: 8px; padding: 8px 11px; margin-bottom: 10px; color: #93a9c4;
+}
+
+/* ---------------- Toast ---------------- */
+.toast {
+	position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(80px);
+	background: #132033; border: 1px solid #34507a;
+	padding: 11px 20px; border-radius: 999px;
+	font-size: 14px; z-index: 80;
+	opacity: 0; transition: all .25s;
+	box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast a { color: var(--cyan); cursor: pointer; text-decoration: underline; margin-left: 10px; }
+
+@media (max-width: 720px) {
+	.two-col { grid-template-columns: 1fr; }
+	.s-row { grid-template-columns: 110px 90px 1fr 38px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+	<div class="top">
+		<h1>蹭饭图数据生成器</h1>
+		<p>填完三步，导出 students.js 放到 js 文件夹里就行</p>
+		<div class="stat-bar">
+			<span class="chip"><b id="st-people">0</b>位同学</span>
+			<span class="chip"><b id="st-prov">0</b>个省份</span>
+			<span class="chip" id="st-warn-chip" style="display:none"><b id="st-warn">0</b>条待完善</span>
+		</div>
+		<div class="save-state" id="save-state"></div>
+	</div>
+
+	<!-- ============ 第一步：班级信息 ============ -->
+	<div class="card">
+		<div class="step-title"><span class="step-no">1</span>班级信息</div>
+		<div class="step-hint">显示在地图最上方的标题，和地图上的老师名单</div>
+
+		<div class="two-col">
+			<label class="field">
+				<span>大标题</span>
+				<input type="text" id="in-title" placeholder="例：XX中学 2024届 高三（X）班">
+			</label>
+			<label class="field">
+				<span>副标题（小字一行）</span>
+				<input type="text" id="in-subtitle" placeholder="例：毕业去向蹭饭图 · 点击发光的省份，找同学蹭饭去">
+			</label>
+		</div>
+
+		<label class="field">
+			<span>任课老师（不需要可以不填）</span>
+			<div id="teachers-list"></div>
+			<button class="btn small" id="btn-add-teacher" type="button">＋ 添加一位老师</button>
+		</label>
+	</div>
+
+	<!-- ============ 第二步：同学名单 ============ -->
+	<div class="card">
+		<div class="step-title"><span class="step-no">2</span>同学名单</div>
+		<div class="step-hint">一行一位同学：选省份、写姓名、写学校。写完一行按回车会自动加下一行</div>
+
+		<div class="toolbar">
+			<button class="btn primary" id="btn-add-row" type="button">＋ 添加一位同学</button>
+			<button class="btn" id="btn-batch" type="button">📋 批量添加（粘贴名单）</button>
+			<button class="btn" id="btn-import" type="button">📂 导入已有的 students.js</button>
+			<button class="btn danger" id="btn-clear" type="button">清空全部</button>
+		</div>
+
+		<div class="list-tools">
+			<span style="color:var(--muted);font-size:13px">只看：</span>
+			<button type="button" class="pick placeholder" id="prov-filter" style="width:auto;min-width:150px" aria-haspopup="listbox" aria-expanded="false">
+				<span class="pick-label">全部省份</span><i class="caret">▾</i>
+			</button>
+			<span class="count-info" id="count-info"></span>
+		</div>
+
+		<div id="students-list"></div>
+
+		<div class="done-row">
+			<button class="btn green" id="btn-step2-done" type="button">✓ 完成名单，去导出 →</button>
+		</div>
+	</div>
+
+	<!-- ============ 第三步：导出 ============ -->
+	<div class="card" id="export-card">
+		<div class="step-title"><span class="step-no">3</span>导出 students.js</div>
+		<div class="step-hint">导出后覆盖网页文件夹里的 js/students.js，刷新地图就能看到</div>
+
+		<div id="check-msg"></div>
+		<div class="export-row">
+			<button class="btn green" id="btn-save" type="button">💾 保存为 students.js</button>
+			<button class="btn" id="btn-download" type="button">⬇ 下载文件</button>
+			<button class="btn" id="btn-copy" type="button">📄 复制全部内容</button>
+		</div>
+		<pre class="preview" id="preview"></pre>
+	</div>
+</div>
+
+<!-- ============ 批量添加弹窗 ============ -->
+<div class="mask" id="batch-mask">
+	<div class="modal">
+		<h3>批量添加同学</h3>
+		<div class="help">每行一位同学，依次写 <b>省份、姓名、学校</b>，用空格、Tab 或逗号隔开都行：</div>
+		<div class="example-line">陕西 王小明 西安交通大学<br>陕西,李小红,西北工业大学<br>北京 赵小刚 清华大学</div>
+		<textarea id="batch-text" placeholder="把名单整列粘进来就行……"></textarea>
+		<div class="parse-result" id="batch-result"></div>
+		<div class="modal-actions">
+			<button class="btn" id="batch-cancel" type="button">取消</button>
+			<button class="btn primary" id="batch-confirm" type="button" disabled>确认添加</button>
+		</div>
+	</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ---------------- 常量 ---------------- */
+const PROVS = ['北京','天津','河北','山西','内蒙古','辽宁','吉林','黑龙江','上海','江苏','浙江','安徽','福建','江西','山东','河南','湖北','湖南','广东','广西','海南','重庆','四川','贵州','云南','西藏','陕西','甘肃','青海','宁夏','新疆','台湾','香港','澳门'];
+const STORE_KEY = 'cengfan-generator-v2';
+let seq = 1;
+const uid = () => 'r' + (Date.now()) + '_' + (seq++);
+
+/* ---------------- 状态 ---------------- */
+let state = {
+	title: '',
+	subtitle: '',
+	teachers: [],   // {id, role, name}
+	rows: [],       // {id, prov, name, school}
+};
+let lastRemoved = null; // 删除撤销
+let saveHandle = null;  // File System Access 句柄
+let saveTimer = null;
+let filterProv = '';    // 列表筛选中的省份（'' = 全部）
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- 自绘下拉（单例弹层，所有 pick 按钮共用） ---------------- */
+const Picker = (() => {
+	let menu = null, anchor = null;
+
+	function ensure() {
+		if (menu) return menu;
+		menu = document.createElement('div');
+		menu.className = 'pick-menu';
+		menu.setAttribute('role', 'listbox');
+		document.body.appendChild(menu);
+		return menu;
+	}
+	function close() {
+		if (!menu || !anchor) return;
+		menu.classList.remove('show');
+		menu.innerHTML = '';
+		anchor.classList.remove('open');
+		anchor.setAttribute('aria-expanded', 'false');
+		anchor = null;
+		document.removeEventListener('mousedown', onDocDown, true);
+		document.removeEventListener('keydown', onKey, true);
+		window.removeEventListener('scroll', onWinScroll, true);
+		window.removeEventListener('resize', close);
+	}
+	function onDocDown(e) {
+		if (menu.contains(e.target) || (anchor && anchor.contains(e.target))) return;
+		close();
+	}
+	function onWinScroll(e) {
+		// 弹层自己内部滚动（拖滚动条/滚轮）不能关，否则滚一下就消失，像滚不动一样
+		if (menu && (e.target === menu || menu.contains(e.target))) return;
+		close(); // 弹层外面的页面滚动了，锚点会错位，收起
+	}
+	function onKey(e) {
+		if (e.key === 'Escape') { e.preventDefault(); close(); }
+	}
+	function position() {
+		const r = anchor.getBoundingClientRect();
+		menu.style.minWidth = Math.max(r.width, 210) + 'px';
+		const mh = menu.offsetHeight, mw = menu.offsetWidth;
+		let top = r.bottom + 6;
+		if (top + mh > window.innerHeight - 8) {
+			const up = r.top - mh - 6;
+			if (up > 8) top = up; // 下方放不下就向上弹
+		}
+		let left = r.left;
+		if (left + mw > window.innerWidth - 8) left = window.innerWidth - mw - 8;
+		if (left < 8) left = 8;
+		menu.style.top = top + 'px';
+		menu.style.left = left + 'px';
+	}
+	function open(btn, items, current, onPick) {
+		ensure();
+		if (anchor === btn) { close(); return; } // 再点一次收起
+		close();
+		anchor = btn;
+		menu.innerHTML = '';
+		items.forEach((it) => {
+			const b = document.createElement('button');
+			b.type = 'button';
+			b.className = 'pick-opt' + (it.value === current ? ' sel' : '');
+			b.textContent = it.label;
+			b.setAttribute('role', 'option');
+			b.onmousedown = (e) => e.preventDefault(); // 别把焦点从触发器抢走
+			b.onclick = () => { onPick(it.value, it.label); close(); };
+			menu.appendChild(b);
+		});
+		menu.classList.add('show');
+		btn.classList.add('open');
+		btn.setAttribute('aria-expanded', 'true');
+		position();
+		document.addEventListener('mousedown', onDocDown, true);
+		document.addEventListener('keydown', onKey, true);
+		window.addEventListener('scroll', onWinScroll, true);
+		window.addEventListener('resize', close);
+	}
+	return { open, close };
+})();
+function persist(show) {
+	clearTimeout(saveTimer);
+	saveTimer = setTimeout(() => {
+		try {
+			localStorage.setItem(STORE_KEY, JSON.stringify(state));
+			if (show) {
+				const el = $('save-state');
+				el.textContent = '草稿已自动保存 ' + new Date().toLocaleTimeString();
+			}
+		} catch (e) { /* 存储满了之类，忽略 */ }
+	}, 250);
+}
+
+/* ---------------- 渲染 ---------------- */
+function renderTeachers() {
+	const box = $('teachers-list');
+	box.innerHTML = '';
+	state.teachers.forEach((t) => {
+		const row = document.createElement('div');
+		row.className = 't-row';
+		row.innerHTML =
+			'<input type="text" class="t-role" placeholder="学科，如 语文 / 班主任·英语" list="role-list">' +
+			'<input type="text" class="t-name" placeholder="老师姓名">' +
+			'<button class="icon-btn t-del" type="button" title="删除">×</button>';
+		row.querySelector('.t-role').value = t.role;
+		row.querySelector('.t-name').value = t.name;
+		row.querySelector('.t-role').oninput = (e) => { t.role = e.target.value; persist(true); };
+		row.querySelector('.t-name').oninput = (e) => { t.name = e.target.value; persist(true); };
+		row.querySelector('.t-del').onclick = () => {
+			state.teachers = state.teachers.filter((x) => x.id !== t.id);
+			renderTeachers(); persist(true);
+		};
+		box.appendChild(row);
+	});
+	// datalist 只建一次
+	if (!$('role-list')) {
+		const dl = document.createElement('datalist');
+		dl.id = 'role-list';
+		['语文','数学','英语','物理','化学','生物','政治','历史','地理','体育','班主任·语文','班主任·数学','班主任·英语'].forEach((r) => {
+			const o = document.createElement('option'); o.value = r; dl.appendChild(o);
+		});
+		document.body.appendChild(dl);
+	}
+}
+
+function rowProblem(r) {
+	if (!PROVS.includes(r.prov)) return '省份没选对';
+	if (!r.name.trim()) return '姓名是空的';
+	return null;
+}
+
+function renderRows() {
+	const box = $('students-list');
+	box.innerHTML = '';
+	const list = filterProv ? state.rows.filter((r) => r.prov === filterProv) : state.rows;
+
+	if (!state.rows.length) {
+		box.innerHTML = '<div class="empty-tip">还没有同学……点上面「＋ 添加一位同学」开始，或者直接把名单粘进来</div>';
+	} else if (!list.length) {
+		box.innerHTML = '<div class="empty-tip">这个省份还没有同学</div>';
+	} else {
+		list.forEach((r) => {
+			const row = document.createElement('div');
+			row.className = 's-row' + (rowProblem(r) ? ' bad' : '');
+			row.innerHTML =
+				'<span class="p-slot"></span>' +
+				'<input type="text" class="f-name" placeholder="姓名" maxlength="20">' +
+				'<input type="text" class="f-school" placeholder="大学 / 学校（没有可以留空）" list="school-list" maxlength="60">' +
+				'<button class="icon-btn f-del" type="button" title="删除这一行">×</button>';
+			row.querySelector('.f-name').value = r.name;
+			row.querySelector('.f-school').value = r.school;
+
+			// 省份选择：自绘下拉（原生 option 弹层在部分 Windows 浏览器上会深底深字，无法控制）
+			const pickBtn = document.createElement('button');
+			pickBtn.type = 'button';
+			pickBtn.className = 'pick f-prov' + (PROVS.includes(r.prov) ? '' : ' placeholder');
+			pickBtn.setAttribute('aria-haspopup', 'listbox');
+			pickBtn.setAttribute('aria-expanded', 'false');
+			pickBtn.innerHTML = '<span class="pick-label"></span><i class="caret">▾</i>';
+			pickBtn.querySelector('.pick-label').textContent = r.prov || '选省份…';
+			pickBtn.onclick = () => {
+				const items = PROVS.map((p) => ({ value: p, label: p }));
+				Picker.open(pickBtn, items, r.prov, (val) => {
+					r.prov = val;
+					persist(true);
+					pickBtn.querySelector('.pick-label').textContent = val;
+					pickBtn.classList.remove('placeholder');
+					row.classList.toggle('bad', !!rowProblem(r));
+					renderStats();
+					renderPreview();
+					syncFilterBtn();
+				});
+			};
+			row.querySelector('.p-slot').replaceWith(pickBtn);
+
+			row.querySelector('.f-name').oninput = (e) => { r.name = e.target.value; persist(); };
+			row.querySelector('.f-school').oninput = (e) => { r.school = e.target.value; persist(); };
+			// 回车跳下一格 / 加新行
+			row.querySelector('.f-name').onkeydown = (e) => {
+				if (e.key === 'Enter') { e.preventDefault(); row.querySelector('.f-school').focus(); }
+			};
+			row.querySelector('.f-school').onkeydown = (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					const nr = addRow(r.prov || '陕西');
+					switchFilterAll();
+					focusRow(nr.id, '.f-name');
+				}
+			};
+			row.querySelector('.f-del').onclick = () => removeRow(r.id);
+			box.appendChild(row);
+		});
+		refreshSchoolList();
+	}
+
+	syncFilterBtn();
+	renderStats();
+	renderPreview();
+}
+
+/* 筛选栏按钮文字随数据同步 */
+function syncFilterBtn() {
+	const btn = $('prov-filter');
+	btn.querySelector('.pick-label').textContent = filterProv || '全部省份';
+	btn.classList.toggle('placeholder', !filterProv);
+}
+
+function afterEdit() {
+	renderRows();
+	persist(true);
+}
+
+function refreshSchoolList() {
+	let dl = $('school-list');
+	if (!dl) { dl = document.createElement('datalist'); dl.id = 'school-list'; document.body.appendChild(dl); }
+	const schools = [...new Set(state.rows.map((r) => r.school.trim()).filter(Boolean))];
+	dl.innerHTML = schools.map((s) => `<option value="${s.replace(/"/g, '&quot;')}">`).join('');
+}
+
+function renderStats() {
+	const bad = state.rows.filter(rowProblem);
+	const good = state.rows.filter((r) => !rowProblem(r));
+	const provs = new Set(good.map((r) => r.prov));
+	$('st-people').textContent = good.length;
+	$('st-prov').textContent = provs.size;
+	$('st-warn-chip').style.display = bad.length ? '' : 'none';
+	$('st-warn').textContent = bad.length;
+	$('count-info').textContent = `共 ${state.rows.length} 行` + (bad.length ? `，${bad.length} 行红框待完善` : '');
+}
+
+/* ---------------- 增删行 ---------------- */
+function addRow(prov) {
+	const r = { id: uid(), prov: prov || '陕西', name: '', school: '' };
+	state.rows.push(r);
+	renderRows();
+	persist();
+	return r;
+}
+
+function removeRow(id) {
+	const idx = state.rows.findIndex((r) => r.id === id);
+	if (idx < 0) return;
+	lastRemoved = { row: state.rows[idx], index: idx };
+	state.rows.splice(idx, 1);
+	afterEdit();
+	showToast('已删除一行 <a id="undo-link">点此撤销</a>');
+	$('undo-link').onclick = () => {
+		if (lastRemoved) {
+			state.rows.splice(Math.min(lastRemoved.index, state.rows.length), 0, lastRemoved.row);
+			lastRemoved = null;
+			afterEdit();
+			showToast('已撤销删除');
+		}
+	};
+}
+
+function focusRow(id, sel) {
+	const rows = $('students-list').querySelectorAll('.s-row');
+	const target = state.rows.filter((r) => !filterProv || r.prov === filterProv);
+	// 简单定位：重新渲染后按 data 顺序找
+	const idx = target.findIndex((r) => r.id === id);
+	if (rows[idx]) { rows[idx].querySelector(sel).focus(); }
+}
+function switchFilterAll() { filterProv = ''; renderRows(); }
+
+/* ---------------- 导出文件文本 ---------------- */
+function q(s) {
+	return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ') + "'";
+}
+
+function buildFileText() {
+	const L = [];
+	L.push('/* =====================================================================');
+	L.push('   蹭饭图数据文件 —— 由 generator.html 生成（也可以继续用生成器导入修改）');
+	L.push('   ===================================================================== */');
+	L.push('');
+	L.push('/* ---------- 班级标题设置 ---------- */');
+	L.push('const SETTINGS = {');
+	L.push('\ttitle: ' + q(state.title) + ',');
+	L.push('\tsubtitle: ' + q(state.subtitle) + ',');
+	if (state.teachers.length) {
+		L.push('\tteachers: [');
+		state.teachers.forEach((t) => {
+			if (t.role.trim() || t.name.trim()) {
+				L.push('\t\t{ role: ' + q(t.role.trim()) + ', name: ' + q(t.name.trim()) + ' },');
+			}
+		});
+		L.push('\t],');
+	} else {
+		L.push('\tteachers: [],');
+	}
+	L.push('};');
+	L.push('');
+	L.push('/* ---------- 同学去向数据 ----------');
+	L.push('   省名写简称：北京/天津/河北/山西/内蒙古/辽宁/吉林/黑龙江/上海/江苏/');
+	L.push('   浙江/安徽/福建/江西/山东/河南/湖北/湖南/广东/广西/海南/重庆/四川/');
+	L.push('   贵州/云南/西藏/陕西/甘肃/青海/宁夏/新疆/台湾/香港/澳门 */');
+	L.push('const STUDENTS = {');
+	PROVS.forEach((p) => {
+		const rs = state.rows.filter((r) => r.prov === p && r.name.trim());
+		if (!rs.length) return;
+		L.push('\t' + p + ': [');
+		rs.forEach((r) => {
+			L.push('\t\t{ name: ' + q(r.name.trim()) + ', school: ' + q(r.school.trim()) + ' },');
+		});
+		L.push('\t],');
+	});
+	L.push('};');
+	return L.join('\n');
+}
+
+function renderPreview() {
+	$('preview').textContent = buildFileText();
+	// 检查信息
+	const bad = state.rows.filter(rowProblem);
+	const msg = $('check-msg');
+	if (!state.title.trim()) {
+		msg.className = 'check-msg err';
+		msg.innerHTML = '⚠ 第一步的<b>大标题</b>还没填';
+	} else if (bad.length) {
+		msg.className = 'check-msg err';
+		msg.innerHTML = '⚠ 有 <b>' + bad.length + '</b> 行信息不完整（省份或姓名缺失，已用红框标出），导出时会自动跳过这些行';
+	} else if (!state.rows.length) {
+		msg.className = 'check-msg err';
+		msg.innerHTML = '⚠ 还没有添加任何同学';
+	} else {
+		msg.className = 'check-msg ok';
+		msg.innerHTML = '✓ 检查通过：' + $('st-people').textContent + ' 位同学、' + $('st-prov').textContent + ' 个省份，可以导出啦';
+	}
+}
+
+/* ---------------- 批量解析 ---------------- */
+function normalizeProv(s) {
+	s = s.trim();
+	if (PROVS.includes(s)) return s;
+	const base = s.replace(/(壮族自治区|回族自治区|维吾尔自治区|特别行政区|自治区|省|市)$/g, '');
+	if (PROVS.includes(base)) return base;
+	if (base === '内蒙') return '内蒙古';
+	if (base.length >= 2) {
+		const hit = PROVS.filter((p) => p.startsWith(base.slice(0, 2)));
+		if (hit.length === 1 && (base === hit[0] || hit[0].startsWith(base))) return hit[0];
+	}
+	return null;
+}
+
+function parseBatch(text) {
+	const ok = [], fail = [];
+	text.split(/\r?\n/).forEach((line, i) => {
+		line = line.trim();
+		if (!line) return;
+		let parts;
+		if (/[\t,，]/.test(line)) {
+			parts = line.split(/[\t,，]+/).map((s) => s.trim()).filter(Boolean);
+		} else {
+			parts = line.split(/\s+/).filter(Boolean);
+		}
+		if (parts.length < 2) { fail.push({ i: i + 1, line, why: '至少要有省份和姓名' }); return; }
+		const prov = normalizeProv(parts[0]);
+		if (!prov) { fail.push({ i: i + 1, line, why: '省份认不出来：' + parts[0] }); return; }
+		const name = parts[1];
+		const school = parts.slice(2).join(' ');
+		ok.push({ prov, name, school });
+	});
+	return { ok, fail };
+}
+
+/* ---------------- 导入已有 students.js ---------------- */
+function importFromText(src) {
+	const fn = new Function(src + ';return [typeof SETTINGS!=="undefined"?SETTINGS:null, typeof STUDENTS!=="undefined"?STUDENTS:null];');
+	const [S, St] = fn();
+	if (!S || !St) throw new Error('文件里没找到 SETTINGS 或 STUDENTS');
+	if (S.title != null) state.title = String(S.title);
+	if (S.subtitle != null) state.subtitle = String(S.subtitle);
+	state.teachers = Array.isArray(S.teachers)
+		? S.teachers.filter((t) => t && (t.name || t.role)).map((t) => ({ id: uid(), role: t.role || '', name: t.name || '' }))
+		: [];
+	const rows = [];
+	Object.keys(St).forEach((provRaw) => {
+		const prov = normalizeProv(provRaw);
+		if (!prov || !Array.isArray(St[provRaw])) return;
+		St[provRaw].forEach((s) => {
+			if (s && s.name) rows.push({ id: uid(), prov, name: String(s.name), school: String(s.school || '') });
+		});
+	});
+	state.rows = rows;
+	$('in-title').value = state.title;
+	$('in-subtitle').value = state.subtitle;
+	renderTeachers();
+	filterProv = '';
+	renderRows();
+	persist(true);
+}
+
+async function importWithPicker() {
+	// 优先 File System Access API
+	if (window.showOpenFilePicker) {
+		try {
+			const [handle] = await window.showOpenFilePicker({
+				types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
+				multiple: false,
+			});
+			const file = await handle.getFile();
+			importFromText(await file.text());
+			showToast('已导入 students.js');
+			return;
+		} catch (e) { if (e.name === 'AbortError') return; /* 其他错误走 fallback */ }
+	}
+	$('file-input').click();
+}
+
+/* ---------------- 保存 / 下载 / 复制 ---------------- */
+async function saveFile() {
+	const text = buildFileText();
+	try {
+		if (window.showSaveFilePicker) {
+			try {
+				if (!saveHandle) {
+					saveHandle = await window.showSaveFilePicker({
+						suggestedName: 'students.js',
+						types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }],
+					});
+				}
+				const w = await saveHandle.createWritable();
+				await w.write(text);
+				await w.close();
+				showToast('已保存 students.js，去刷新地图吧');
+				return;
+			} catch (e) { if (e.name === 'AbortError') return; saveHandle = null; }
+		}
+	} catch (e) { saveHandle = null; }
+	downloadFallback(text);
+}
+
+function downloadFallback(text) {
+	const blob = new Blob([text], { type: 'text/javascript;charset=utf-8' });
+	const a = document.createElement('a');
+	a.href = URL.createObjectURL(blob);
+	a.download = 'students.js';
+	a.click();
+	setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+	showToast('已下载，记得放到 js 文件夹里覆盖旧文件');
+}
+
+function copyText(text) {
+	const done = () => showToast('已复制到剪贴板');
+	if (navigator.clipboard && navigator.clipboard.writeText) {
+		navigator.clipboard.writeText(text).then(done).catch(() => legacyCopy(text));
+	} else { legacyCopy(text); }
+}
+function legacyCopy(text) {
+	const ta = document.createElement('textarea');
+	ta.value = text; document.body.appendChild(ta); ta.select();
+	try { document.execCommand('copy'); showToast('已复制到剪贴板'); }
+	catch (e) { showToast('复制失败，请手动选择右侧代码'); }
+	ta.remove();
+}
+
+/* ---------------- Toast ---------------- */
+let toastTimer = null;
+function showToast(html) {
+	const t = $('toast');
+	t.innerHTML = html;
+	t.classList.add('show');
+	clearTimeout(toastTimer);
+	toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+/* ---------------- 事件绑定 ---------------- */
+$('in-title').oninput = (e) => { state.title = e.target.value; renderPreview(); persist(); };
+$('in-subtitle').oninput = (e) => { state.subtitle = e.target.value; renderPreview(); persist(); };
+$('btn-add-teacher').onclick = () => {
+	state.teachers.push({ id: uid(), role: '', name: '' });
+	renderTeachers(); persist(true);
+};
+$('btn-add-row').onclick = () => {
+	const last = state.rows[state.rows.length - 1];
+	const nr = addRow(last ? last.prov : '陕西');
+	focusRow(nr.id, '.f-name');
+};
+$('btn-clear').onclick = () => {
+	if (!state.rows.length && !state.teachers.length) return;
+	if (confirm('确定清空全部老师和同学吗？（此操作不可撤销，但没导出前不会影响地图）')) {
+		state.rows = []; state.teachers = [];
+		renderTeachers(); renderRows(); persist(true);
+	}
+};
+$('prov-filter').onclick = () => {
+	const used = PROVS.filter((p) => state.rows.some((r) => r.prov === p));
+	const items = [{ value: '', label: '全部省份' }].concat(used.map((p) => ({ value: p, label: p })));
+	Picker.open($('prov-filter'), items, filterProv, (val) => {
+		filterProv = val;
+		renderRows();
+	});
+};
+/* 第二步「完成」：收掉弹层与提示 → 重置第三步为全新检查状态 → 平滑跳过去并高亮 */
+$('btn-step2-done').onclick = () => {
+	Picker.close();
+	if (filterProv) { filterProv = ''; renderRows(); } // 回到全部省份，保证看到的是全量检查
+	$('toast').classList.remove('show');
+	renderPreview();                                   // 重新跑检查、重新生成预览代码
+	$('preview').scrollTop = 0;                        // 预览滚回开头
+	const card = $('export-card');
+	card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	card.classList.remove('flash');
+	void card.offsetWidth;                             // 重启动画，连点也能再闪
+	card.classList.add('flash');
+};
+$('btn-save').onclick = saveFile;
+$('btn-download').onclick = () => downloadFallback(buildFileText());
+$('btn-copy').onclick = () => copyText(buildFileText());
+$('btn-import').onclick = importWithPicker;
+
+// 隐藏的文件选择（不支持 File System Access 时的后路）
+const fileInput = document.createElement('input');
+fileInput.type = 'file';
+fileInput.id = 'file-input';
+fileInput.accept = '.js,text/javascript';
+fileInput.style.display = 'none';
+fileInput.onchange = () => {
+	const f = fileInput.files[0];
+	if (!f) return;
+	const fr = new FileReader();
+	fr.onload = () => {
+		try { importFromText(fr.result); showToast('已导入 ' + f.name); }
+		catch (e) { alert('导入失败：这个文件好像不是 students.js\n\n' + e.message); }
+	};
+	fr.readAsText(f, 'utf-8');
+};
+document.body.appendChild(fileInput);
+
+// 批量弹窗
+const mask = $('batch-mask');
+$('btn-batch').onclick = () => {
+	$('batch-text').value = '';
+	$('batch-result').innerHTML = '';
+	$('batch-confirm').disabled = true;
+	mask.classList.add('show');
+	setTimeout(() => $('batch-text').focus(), 50);
+};
+$('batch-cancel').onclick = () => mask.classList.remove('show');
+mask.onclick = (e) => { if (e.target === mask) mask.classList.remove('show'); };
+
+let parsed = null;
+$('batch-text').oninput = () => {
+	parsed = parseBatch($('batch-text').value);
+	const box = $('batch-result');
+	const btn = $('batch-confirm');
+	if (!parsed.ok.length && !parsed.fail.length) {
+		box.innerHTML = ''; btn.disabled = true; return;
+	}
+	let html = '<span class="ok2">识别成功 ' + parsed.ok.length + ' 人</span>';
+	if (parsed.fail.length) {
+		html += '　<span class="bad2">' + parsed.fail.length + ' 行认不出来，添加时会跳过</span>';
+		html += '<details><summary>查看问题行</summary>' +
+			parsed.fail.map((f) => '第 ' + f.i + ' 行：' + f.why + '<br>　　' + f.line.replace(/</g, '&lt;')).join('') +
+			'</details>';
+	}
+	box.innerHTML = html;
+	btn.disabled = !parsed.ok.length;
+};
+$('batch-confirm').onclick = () => {
+	if (!parsed) return;
+	parsed.ok.forEach((r) => state.rows.push({ id: uid(), prov: r.prov, name: r.name, school: r.school }));
+	mask.classList.remove('show');
+	filterProv = '';
+	renderRows(); persist(true);
+	showToast('已添加 ' + parsed.ok.length + ' 位同学');
+};
+
+/* ---------------- 启动：恢复草稿 ---------------- */
+(function init() {
+	let loaded = false;
+	try {
+		const raw = localStorage.getItem(STORE_KEY);
+		if (raw) {
+			const d = JSON.parse(raw);
+			if (d && Array.isArray(d.rows)) {
+				state = {
+					title: d.title || '',
+					subtitle: d.subtitle || '',
+					teachers: (d.teachers || []).map((t) => ({ id: uid(), role: t.role || '', name: t.name || '' })),
+					rows: d.rows.map((r) => ({ id: uid(), prov: r.prov || '', name: r.name || '', school: r.school || '' })),
+				};
+				loaded = true;
+			}
+		}
+	} catch (e) { /* 草稿坏了就用空状态 */ }
+
+	if (!loaded) {
+		// 第一次打开：给一组贴心默认值
+		state.title = '';
+		state.subtitle = '毕业去向蹭饭图 · 点击发光的省份，找同学蹭饭去';
+	}
+	$('in-title').value = state.title;
+	$('in-subtitle').value = state.subtitle;
+	renderTeachers();
+	renderRows();
+	if (loaded) $('save-state').textContent = '已恢复上次编辑的草稿';
+})();
+
+// 供自动化测试用
+window.__gen = { buildFileText, importFromText, parseBatch, state: () => state };
+</script>
+</body>
+</html>
