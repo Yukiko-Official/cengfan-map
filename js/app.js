@@ -397,4 +397,116 @@
 			if (!o.classList.contains('r-' + key)) o.classList.add('faded');
 		});
 	});
+
+	/* =====================================================
+	   搜索：按 姓名 / 学校 / 省份 找到同学 → 定位到对应省份，
+	   并在弹出的名单卡片里把这个人点亮
+	   ===================================================== */
+	const searchBox = document.getElementById('search');
+	const searchInput = document.getElementById('search-input');
+	const searchResults = document.getElementById('search-results');
+
+	const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+		({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+	/* 把 roster 摊平成一条条同学记录，方便一次过滤 */
+	const searchIndex = [];
+	roster.forEach((list, code) => {
+		const data = D.provinces.find((x) => x.c === code);
+		const prov = data ? (SHORT[data.n] || data.n) : '';
+		list.forEach((s) => searchIndex.push({ name: s.name, school: s.school, code, prov }));
+	});
+
+	let hits = [];
+	let hlIdx = -1;
+	let composing = false;
+
+	function renderSearchResults() {
+		const q = searchInput.value.trim();
+		if (!hits.length) {
+			searchResults.innerHTML = q ? '<li class="search-empty">没有找到匹配的同学</li>' : '';
+			searchResults.classList.toggle('show', !!q);
+			return;
+		}
+		searchResults.innerHTML = hits.map((it, i) =>
+			`<li class="search-item${i === hlIdx ? ' hl' : ''}" data-i="${i}">` +
+			`<span class="s-name">${esc(it.name)}</span>` +
+			(it.school ? `<span class="s-school">${esc(it.school)}</span>` : '') +
+			`<span class="s-prov">${esc(it.prov)}</span></li>`
+		).join('');
+		searchResults.classList.add('show');
+	}
+
+	function runSearch() {
+		const q = searchInput.value.trim().toLowerCase();
+		hlIdx = -1;
+		hits = q
+			? searchIndex.filter((it) =>
+				it.name.toLowerCase().includes(q) ||
+				it.school.toLowerCase().includes(q) ||
+				it.prov.toLowerCase().includes(q)
+			).slice(0, 12)
+			: [];
+		renderSearchResults();
+	}
+
+	function closeSearch() {
+		searchResults.classList.remove('show');
+		searchResults.innerHTML = '';
+		hits = [];
+		hlIdx = -1;
+	}
+
+	function pickResult(it) {
+		searchInput.blur();
+		closeSearch();
+		selectProvince(it.code);
+		/* 同名同学可能不止一个，优先只点亮同一所学校里的那个 */
+		card.querySelectorAll('.school').forEach((blk) => {
+			if (it.school && blk.querySelector('.school-name').textContent !== it.school) return;
+			blk.querySelectorAll('.school-names span').forEach((sp) => {
+				if (sp.textContent === it.name) sp.classList.add('hit');
+			});
+		});
+	}
+
+	searchInput.addEventListener('compositionstart', () => { composing = true; });
+	searchInput.addEventListener('compositionend', () => { composing = false; runSearch(); });
+	searchInput.addEventListener('input', () => { if (!composing) runSearch(); });
+	searchInput.addEventListener('focus', () => { if (searchInput.value.trim()) runSearch(); });
+	searchInput.addEventListener('keydown', (e) => {
+		if (e.key === 'Escape') {
+			e.stopPropagation(); // 别让 Esc 顺手把已打开的省份卡片也关掉
+			if (searchResults.classList.contains('show')) closeSearch();
+			else searchInput.blur();
+			return;
+		}
+		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+			e.preventDefault();
+			if (!hits.length) return;
+			const step = e.key === 'ArrowDown' ? 1 : hits.length - 1;
+			if (hlIdx < 0) hlIdx = e.key === 'ArrowDown' ? 0 : hits.length - 1;
+			else hlIdx = (hlIdx + step) % hits.length;
+			renderSearchResults();
+			const el = searchResults.querySelector('.search-item.hl');
+			if (el) el.scrollIntoView({ block: 'nearest' });
+			return;
+		}
+		if (e.key === 'Enter' && hits.length) {
+			e.preventDefault();
+			pickResult(hits[hlIdx >= 0 ? hlIdx : 0]);
+		}
+	});
+
+	/* 用 mousedown 而不是 click：避免输入框先失焦、列表被收起后点空 */
+	searchResults.addEventListener('mousedown', (e) => {
+		const li = e.target.closest('.search-item');
+		if (!li) return;
+		e.preventDefault();
+		pickResult(hits[+li.dataset.i]);
+	});
+
+	document.addEventListener('mousedown', (e) => {
+		if (!searchBox.contains(e.target)) closeSearch();
+	});
 })();
